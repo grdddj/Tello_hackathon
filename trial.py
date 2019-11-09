@@ -40,7 +40,7 @@ except KeyboardInterrupt as err:
     print(err)
     print("KEYBOARD INTERRUPT")
     my_drone.land()
-except Error as err:
+except Exception as err:
     print("UNKNOWN ERROR")
     print(err)
     my_drone.land()
