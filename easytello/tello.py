@@ -3,6 +3,7 @@ import threading
 import time
 import cv2
 from easytello.stats import Stats
+from functools import wraps
 
 class Tello:
     def __init__(self, tello_ip: str='192.168.10.1', debug: bool=True):
@@ -11,7 +12,7 @@ class Tello:
         self.local_port = 8889
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind((self.local_ip, self.local_port))
-        
+
         # Setting Tello ip and port info
         self.tello_ip = tello_ip
         self.tello_port = 8889
@@ -30,6 +31,11 @@ class Tello:
         # Setting Tello to command mode
         self.command()
 
+        # When set to True, the photo will be saved and model will be notified
+        self.send_photo = False
+
+    # trying to apply a decorator, but solved by calling signal_to_make_photo at the end
+    # @make_photo
     def send_command(self, command: str, query: bool =False):
         # New log entry created for the outbound command
         self.log.append(Stats(command, len(self.log)))
@@ -39,7 +45,7 @@ class Tello:
         # Displaying conformation message (if 'debug' os True)
         if self.debug is True:
             print('Sending command: {}'.format(command))
-            
+
         # Checking whether the command has timed out or not (based on value in 'MAX_TIME_OUT')
         start = time.time()
         while not self.log[-1].got_response():  # Runs while no repsonse has been received in log
@@ -51,6 +57,11 @@ class Tello:
         # Prints out Tello response (if 'debug' is True)
         if self.debug is True and query is False:
             print('Response: {}'.format(self.log[-1].get_response()))
+
+        # At the end of each command, wait a little bit and take a photo
+        # TODO: decide, whether time.sleep() is even necessary
+        time.sleep(1)
+        self.signal_to_make_photo()
 
     def _receive_thread(self):
         while True:
@@ -73,9 +84,69 @@ class Tello:
             k = cv2.waitKey(1) & 0xFF
             if k == 27:
                 break
+            if k == 13: # key "enter"
+                # print("ENTTEEEER")
+                print("saving a file")
+                index += 1
+                timestamp = time.time()
+                cv2.imwrite("file_ENTER{}.png".format(timestamp), frame)
+
+            if k == 97: # key "a"
+                print("a pressed")
+                self.signal_to_make_photo()
+
+            # Ready to respond for the need of photo
+            if self.send_photo:
+                self.send_photo = False
+                print("Automatic photo")
+                file_name = self.save_photo(frame)
+                self.contact_model(file_name)
+
         cap.release()
         cv2.destroyAllWindows()
-    
+
+    # Decorators are not possible to make in classes (or nor very useful)
+    # Theoretically I can call self.make_photo(original_function), instead of decorating it
+    def make_photo(self, orig_func):
+        @wraps(orig_func)
+        def wrapper(*args, **kwargs):
+            result = orig_func(*args, **kwargs)
+
+            time.sleep(1)
+
+            self.signal_to_make_photo()
+
+            return result
+
+        return wrapper
+
+    def signal_to_make_photo(self):
+        """
+        Sends signal to save a photo
+        """
+        print_with_time("signal_to_make_photo")
+        self.send_photo = True
+
+    def save_photo(self, frame):
+        """
+        Saves a photo on the harddrive
+        """
+        print_with_time("save_photo")
+        timestamp = time.time()
+        file_name = "photo_{}.png".format(timestamp)
+        cv2.imwrite(file_name, frame)
+
+        return file_name
+
+    def contact_model(self, file_name, model):
+        """
+        Calls the model to analyze the photo
+        """
+        print_with_time("contact_model")
+        model.call(file_name)
+
+        # TODO: contact the model - send it the file_name to analyse it
+
     def wait(self, delay: float):
         # Displaying wait message (if 'debug' is True)
         if self.debug is True:
@@ -84,14 +155,14 @@ class Tello:
         self.log.append(Stats('wait', len(self.log)))
         # Delay is activated
         time.sleep(delay)
-    
+
     def get_log(self):
         return self.log
 
     # Controll Commands
     def command(self):
         self.send_command('command')
-    
+
     def takeoff(self):
         self.send_command('takeoff')
 
@@ -111,7 +182,7 @@ class Tello:
 
     def emergency(self):
         self.send_command('emergency')
-    
+
     # Movement Commands
     def up(self, dist: int):
         self.send_command('up {}'.format(dist))
@@ -124,7 +195,7 @@ class Tello:
 
     def right(self, dist: int):
         self.send_command('right {}'.format(dist))
-        
+
     def forward(self, dist: int):
         self.send_command('forward {}'.format(dist))
 
@@ -133,7 +204,7 @@ class Tello:
 
     def cw(self, degr: int):
         self.send_command('cw {}'.format(degr))
-    
+
     def ccw(self, degr: int):
         self.send_command('ccw {}'.format(degr))
 
@@ -172,7 +243,7 @@ class Tello:
     def get_height(self):
         self.send_command('height?', True)
         return self.log[-1].get_response()
-    
+
     def get_temp(self):
         self.send_command('temp?', True)
         return self.log[-1].get_response()
@@ -188,7 +259,7 @@ class Tello:
     def get_acceleration(self):
         self.send_command('acceleration?', True)
         return self.log[-1].get_response()
-    
+
     def get_tof(self):
         self.send_command('tof?', True)
         return self.log[-1].get_response()
@@ -196,4 +267,7 @@ class Tello:
     def get_wifi(self):
         self.send_command('wifi?', True)
         return self.log[-1].get_response()
-    
+
+def print_with_time(text):
+    current_time = time.time()
+    print("{} - {}".format(text, current_time))
