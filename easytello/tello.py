@@ -36,10 +36,10 @@ class Tello:
         self.send_photo = False
 
         # Storing the whole history of positions
-        self.up_down = []
-        self.forward_backward = []
-        self.right_left = []
-        self.clockwise_angle = []
+        self.up_down = [0]
+        self.forward_backward = [0]
+        self.right_left = [0]
+        self.clockwise_angle = [0]
 
         # Storing the histoyry of commands with their values
         self.command_history = []
@@ -47,9 +47,26 @@ class Tello:
         # Storing the things that can be seen from certain coordinates
         self.objects_to_be_seen = {}
 
+        # Sending infinite ping to the battery, to keep the connection keep_alive_thread        # Intializing response thread
+        self.receive_thread = threading.Thread(target=self.battery_ping)
+        self.receive_thread.daemon = True
+        self.receive_thread.start()
+
+    def battery_ping(self, debug=False):
+        # _f = str(inspect.stack()[0][3])
+
+        while True:
+            time.sleep(5)
+            # if debug:
+            #     print(f"{_f}: sent ping")
+            # if command(b'battery?', debug=debug) is not None:
+            #     break
+            print("contacting battery")
+            self.get_battery()
+
     # trying to apply a decorator, but solved by calling signal_to_make_photo at the end
     # @make_photo
-    def send_command(self, command: str, query: bool =False):
+    def send_command(self, command: str, query: bool=False, make_photo: bool=False):
         # New log entry created for the outbound command
         self.log.append(Stats(command, len(self.log)))
 
@@ -73,8 +90,9 @@ class Tello:
 
         # At the end of each command, wait a little bit and take a photo
         # TODO: decide, whether time.sleep() is even necessary
-        time.sleep(1)
-        self.signal_to_make_photo()
+        if make_photo:
+            time.sleep(1)
+            self.signal_to_make_photo()
 
     def _receive_thread(self):
         while True:
@@ -90,25 +108,29 @@ class Tello:
         cap = cv2.VideoCapture('udp://'+self.tello_ip+':11111')
         # Runs while 'stream_state' is True
         while self.stream_state:
-            ret, frame = cap.read()
-            cv2.imshow('DJI Tello', frame)
+            try:
+                ret, frame = cap.read()
+                cv2.imshow('DJI Tello', frame)
 
-            # Video Stream is closed if escape key is pressed
-            k = cv2.waitKey(1) & 0xFF
-            if k == 27:
-                break
+                # Video Stream is closed if escape key is pressed
+                k = cv2.waitKey(1) & 0xFF
+                if k == 27:
+                    break
 
-            # Used for testing purposes when in person mode
-            if k == 13: # key "enter"
-                print("Enter pressed")
-                self.signal_to_make_photo()
+                # Used for testing purposes when in person mode
+                if k == 13: # key "enter"
+                    print("Enter pressed")
+                    self.signal_to_make_photo()
 
-            # Ready to respond for the need of photo
-            if self.send_photo:
-                self.send_photo = False
-                print("Automatic photo")
-                file_name = self.save_photo(frame)
-                self.contact_model(file_name)
+                # Ready to respond for the need of photo
+                if self.send_photo:
+                    self.send_photo = False
+                    print("Automatic photo")
+                    file_name = self.save_photo(frame)
+                    self.contact_model(file_name)
+            except cv2.error as err:
+                print("CV ERROR ENCOUNTERED")
+                print(err)
 
         cap.release()
         cv2.destroyAllWindows()
@@ -148,15 +170,45 @@ class Tello:
 
     def contact_model(self, file_name):
         """
-        Calls the model to analyze the photo
+        Calls the model to analyze the photo. Stores the objects it finds in a
+            local dictionary.
         """
         print_with_time("contact_model")
-        result = detect.detect_image_from_path(file_name)
+        response = detect.detect_image_from_path(file_name)
         current_positon = self.get_current_position_string()
-        self.objects_to_be_seen[current_positon] = result
-        print(result)
+        self.objects_to_be_seen[current_positon] = response
 
-        # TODO: contact the model - send it the file_name to analyse it
+        # Drawing a rectangle around the object
+        img = cv2.imread(file_name)
+        x_pixels_dron = 960
+        y_pixels_dron = 720
+        x_pixels_model = 416
+        y_pixels_model = 416
+        x_ratio = x_pixels_dron / x_pixels_model
+        y_ratio = y_pixels_dron / y_pixels_model
+
+        print("rectangle")
+        for obj in response:
+            print(obj)
+
+            x1 = int(obj["x1"] * x_ratio)
+            x2 = int(obj["x2"] * x_ratio)
+            y1 = int(obj["y1"] * y_ratio)
+            y2 = int(obj["y2"] * y_ratio)
+
+            area = abs(x1 - x2) * abs(y1 - y2)
+            print(area)
+
+            start = (x1, y1)
+            end = (x2, y2)
+            print("start", start)
+            print("end", end)
+
+            cv2.rectangle(img, start, end, (0, 255, 0), 3)
+
+        cv2.imwrite(file_name[:-4] + "_rectangled.png", img)
+
+        print(response)
 
     def wait(self, delay: float):
         # Displaying wait message (if 'debug' is True)
@@ -197,35 +249,35 @@ class Tello:
     # Movement Commands
     def up(self, dist: int):
         self.store_new_position("up_down", dist)
-        self.send_command('up {}'.format(dist))
+        self.send_command('up {}'.format(dist), make_photo=True)
 
     def down(self, dist: int):
         self.store_new_position("up_down", -dist)
-        self.send_command('down {}'.format(dist))
+        self.send_command('down {}'.format(dist), make_photo=True)
 
     def left(self, dist: int):
         self.store_new_position("right_left", -dist)
-        self.send_command('left {}'.format(dist))
+        self.send_command('left {}'.format(dist), make_photo=True)
 
     def right(self, dist: int):
         self.store_new_position("right_left", dist)
-        self.send_command('right {}'.format(dist))
+        self.send_command('right {}'.format(dist), make_photo=True)
 
     def forward(self, dist: int):
         self.store_new_position("forward_backward", dist)
-        self.send_command('forward {}'.format(dist))
+        self.send_command('forward {}'.format(dist), make_photo=True)
 
     def back(self, dist: int):
         self.store_new_position("forward_backward", -dist)
-        self.send_command('back {}'.format(dist))
+        self.send_command('back {}'.format(dist), make_photo=True)
 
     def cw(self, degr: int):
         self.store_new_position("clockwise_angle", degr)
-        self.send_command('cw {}'.format(degr))
+        self.send_command('cw {}'.format(degr), make_photo=True)
 
     def ccw(self, degr: int):
         self.store_new_position("clockwise_angle", -degr)
-        self.send_command('ccw {}'.format(degr))
+        self.send_command('ccw {}'.format(degr), make_photo=True)
 
     def flip(self, direc: str):
         self.send_command('flip {}'.format(direc))

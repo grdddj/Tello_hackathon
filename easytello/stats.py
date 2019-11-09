@@ -26,7 +26,12 @@ class Stats:
         return self.response
 
     def numeric_response(self, data: str):
-        num_val = ''.join(i for i in data if i.isdigit() or i=='-' or i=='.')
+        try:
+            num_val = ''.join(i for i in data if i.isdigit() or i=='-' or i=='.')
+        except TypeError as err:
+            print("Type ERROOOOOR")
+            print(err)
+            num_val = 1
         return num_val
 
     def int_response(self, data: str):
@@ -34,12 +39,12 @@ class Stats:
 
     def float_response(self, data: str):
         return float(self.numeric_response(data))
-    
+
     def attitude_response(self):
         raw_att = self.response.split(';')
         att_data = (self.int_response(raw_att[0]), self.int_response(raw_att[1]), self.int_response(raw_att[2]))
         return att_data
-    
+
     def acceleration_response(self):
         raw_acc = self.response.split(';')
         acc_data = (self.float_response(raw_acc[0]), self.float_response(raw_acc[1]), self.float_response(raw_acc[2]))
