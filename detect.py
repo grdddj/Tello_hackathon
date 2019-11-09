@@ -18,9 +18,24 @@ def load_classes(path):
 
 def read_image_as_numpy(filename):
     im = Image.open(filename)
-    np_im = im.resize((416, 416), Image.BICUBIC)
-    np_im = np.swapaxes(np.swapaxes(np_im, 0, 2), 1, 2)
-    return np_im.astype(np.float32) / 255.0
+    size = [im.size[0], im.size[1]]
+    resized = int(416 / (np.max(size) / np.min(size)))
+    if size[0] > size[1]:
+        np_im = im.resize((416, resized), Image.BICUBIC)
+    else:
+        np_im = im.resize((resized, 416), Image.BICUBIC)
+    np_im = np.array(np_im)
+
+    img = np.zeros((416, 416, 3))
+    start = int((416 - resized) / 2)
+    if size[0] > size[1]:
+        img[start:start + resized, :] = np_im
+    else:
+        img[:, start:start + resized] = np_im
+
+    img = np.swapaxes(np.swapaxes(img, 0, 2), 1, 2)
+
+    return img.astype(np.float32) / 255.0
 
 
 def detect_image_objects(image):
