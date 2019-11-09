@@ -38,6 +38,9 @@ def detect_image_objects(image):
         detections = model(torch_image)
         detections = non_max_suppression(detections, 0.8, 0.4)
 
+    if len(detections) == 0:
+        return []
+
     results = []
     for d in detections[0]:
         results.append(
