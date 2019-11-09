@@ -4,6 +4,7 @@ import time
 import cv2
 from easytello.stats import Stats
 from functools import wraps
+import detect
 
 class Tello:
     def __init__(self, tello_ip: str='192.168.10.1', debug: bool=True):
@@ -33,6 +34,18 @@ class Tello:
 
         # When set to True, the photo will be saved and model will be notified
         self.send_photo = False
+
+        # Storing the whole history of positions
+        self.up_down = []
+        self.forward_backward = []
+        self.right_left = []
+        self.clockwise_angle = []
+
+        # Storing the histoyry of commands with their values
+        self.command_history = []
+
+        # Storing the things that can be seen from certain coordinates
+        self.objects_to_be_seen = {}
 
     # trying to apply a decorator, but solved by calling signal_to_make_photo at the end
     # @make_photo
@@ -84,15 +97,10 @@ class Tello:
             k = cv2.waitKey(1) & 0xFF
             if k == 27:
                 break
-            if k == 13: # key "enter"
-                # print("ENTTEEEER")
-                print("saving a file")
-                index += 1
-                timestamp = time.time()
-                cv2.imwrite("file_ENTER{}.png".format(timestamp), frame)
 
-            if k == 97: # key "a"
-                print("a pressed")
+            # Used for testing purposes when in person mode
+            if k == 13: # key "enter"
+                print("Enter pressed")
                 self.signal_to_make_photo()
 
             # Ready to respond for the need of photo
@@ -138,12 +146,15 @@ class Tello:
 
         return file_name
 
-    def contact_model(self, file_name, model):
+    def contact_model(self, file_name):
         """
         Calls the model to analyze the photo
         """
         print_with_time("contact_model")
-        model.call(file_name)
+        result = detect.detect_image_from_path(file_name)
+        current_positon = self.get_current_position_string()
+        self.objects_to_be_seen[current_positon] = result
+        print(result)
 
         # TODO: contact the model - send it the file_name to analyse it
 
@@ -185,27 +196,35 @@ class Tello:
 
     # Movement Commands
     def up(self, dist: int):
+        self.store_new_position("up_down", dist)
         self.send_command('up {}'.format(dist))
 
     def down(self, dist: int):
+        self.store_new_position("up_down", -dist)
         self.send_command('down {}'.format(dist))
 
     def left(self, dist: int):
+        self.store_new_position("right_left", -dist)
         self.send_command('left {}'.format(dist))
 
     def right(self, dist: int):
+        self.store_new_position("right_left", dist)
         self.send_command('right {}'.format(dist))
 
     def forward(self, dist: int):
+        self.store_new_position("forward_backward", dist)
         self.send_command('forward {}'.format(dist))
 
     def back(self, dist: int):
+        self.store_new_position("forward_backward", -dist)
         self.send_command('back {}'.format(dist))
 
     def cw(self, degr: int):
+        self.store_new_position("clockwise_angle", degr)
         self.send_command('cw {}'.format(degr))
 
     def ccw(self, degr: int):
+        self.store_new_position("clockwise_angle", -degr)
         self.send_command('ccw {}'.format(degr))
 
     def flip(self, direc: str):
@@ -267,6 +286,42 @@ class Tello:
     def get_wifi(self):
         self.send_command('wifi?', True)
         return self.log[-1].get_response()
+
+    def store_new_position(self, axis, distance):
+        """
+        Appends current values to the history position
+        """
+        height_to_append = self.up_down[-1]
+        length_to_append = self.forward_backward[-1]
+        width_to_append = self.right_left[-1]
+        angle_to_append = self.clockwise_angle[-1]
+
+        if axis == "up_down":
+            height_to_append += distance
+        elif axis == "forward_backward":
+            length_to_append += distance
+        elif axis == "width":
+            width_to_append += distance
+        elif axis == "angle":
+            angle_to_append += distance
+
+        self.up_down.append(height_to_append)
+        self.forward_backward.append(length_to_append)
+        self.right_left.append(width_to_append)
+        self.clockwise_angle.append(angle_to_append)
+
+    def get_current_position_string(self):
+        """
+        Forms a string describing current position
+        """
+        up_down = self.up_down[-1]
+        forward_backward = self.forward_backward[-1]
+        right_left = self.right_left[-1]
+        clockwise_angle = self.clockwise_angle[-1]
+
+        # I chose ":" as a delimiters instead of "-", because there can be a "minus" sign in a number
+        return "{}:{}:{}:{}".format(up_down, forward_backward, right_left, clockwise_angle)
+
 
 def print_with_time(text):
     current_time = time.time()

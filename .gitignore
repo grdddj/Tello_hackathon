@@ -108,3 +108,4 @@ venv.bak/
 test.py
 
 *.png
+*.weights
