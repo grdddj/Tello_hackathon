@@ -75,4 +75,4 @@ def detect_image_from_path(filename):
 
 
 if __name__ == "__main__":
-    print(detect_image_from_path('samples/jirka.jpg'))
+    print(detect_image_from_path('samples/bottles.jpg'))
