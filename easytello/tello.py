@@ -55,6 +55,8 @@ class Tello:
         self.receive_thread.daemon = True
         self.receive_thread.start()
 
+        self.found = False
+
     def battery_ping(self, debug=False):
         # _f = str(inspect.stack()[0][3])
 
@@ -65,7 +67,8 @@ class Tello:
             # if command(b'battery?', debug=debug) is not None:
             #     break
             print("contacting battery")
-            self.get_battery()
+            capacity = self.get_battery()
+            print(str(capacity) + "%")
 
     # trying to apply a decorator, but solved by calling signal_to_make_photo at the end
     # @make_photo
@@ -208,20 +211,6 @@ class Tello:
         x_ratio = x_pixels_dron / x_pixels_model
         y_ratio = y_pixels_dron / y_pixels_model
 
-        found_mode = False
-        is_lost = False
-
-        for i, d in enumerate(response):
-            found_mode = True
-
-            angle, height, forward = navigate.analyze_scene(d)
-            no_change = angle == 0 and height == 0 and forward == 0
-            print("{} {}: angle {} height {} forward {}".format(d['name'], i, angle, height, forward))
-
-            if found_mode and (is_lost or no_change):
-                navigate.take_three_flips()
-                found_mode = False        # Initializing agent to help us navigate
-
         print("rectangle")
         for obj in response:
             print(obj)
@@ -256,6 +245,44 @@ class Tello:
 
         print(response)
 
+        # Speaking with the agent, who tells us what to do next to approach a bottle
+        found_mode = False
+        is_lost = False
+
+        for i, d in enumerate(response):
+
+            # Followign a bottle!!!!!
+            if d["name"] == "bottle":
+
+                found_mode = True
+
+                angle, height, forward = navigate.analyze_scene(d)
+                no_change = angle == 0 and height == 0 and forward == 0
+                print("{} {}: angle {} height {} forward {}".format(d['name'], i, angle, height, forward))
+
+                command = ""
+                if angle > 0:
+                    command = "cw {}".format(20)
+                elif angle < 0:
+                    command = "ccw {}".format(20)
+                elif forward > 0:
+                    command = "forward {}".format(40)
+
+                self.found = True
+                break
+        else:
+            command = "cw 20"
+            if self.found == True:
+                navigate.take_three_flips()
+
+        with open("commands.txt", "a") as command_file:
+            command_file.write(command + "\n")
+
+
+        if found_mode and (is_lost or no_change):
+            navigate.take_three_flips()
+            found_mode = False
+
         return is_there_a_bottle
 
     def wait(self, delay: float):
@@ -275,7 +302,7 @@ class Tello:
         self.send_command('command')
 
     def takeoff(self):
-        self.send_command('takeoff')
+        self.send_command('takeoff', make_photo=True)
 
     def land(self):
         self.send_command('land')

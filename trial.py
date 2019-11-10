@@ -11,24 +11,23 @@ try:
 
     my_drone.takeoff()
 
+    # Deleting old commands
+    with open("commands.txt", "w") as command_file:
+        pass
 
-
-    for i in range(4):
-
-        my_drone.forward(50)
-        time.sleep(1)
-        my_drone.back(50)
-        time.sleep(1)
-
-        # my_drone.forward(50)
-        # time.sleep(1)
-        # my_drone.cw(90)
-        # time.sleep(1)
-
-
-    # time.sleep(5)
-
-
+    index = 0
+    while True:
+        time.sleep(0.5)
+        with open("commands.txt", "r") as command_file:
+            lines = command_file.readlines()
+            try:
+                current_command_line = lines[index]
+                if current_command_line:
+                    index += 1
+                    my_drone.send_command(current_command_line, make_photo=True)
+            except IndexError:
+                # print("INDEX ERRROR")
+                pass
 
     my_drone.land()
 

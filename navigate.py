@@ -77,6 +77,9 @@ def take_action_from_scene(box, actions):
 
 def take_three_flips():
     print("taking three flips")
+    with open("commands.txt", "a") as command_file:
+        command_file.write("flip back" + "\n")
+
     pass  # Not yet implemented
 
 
