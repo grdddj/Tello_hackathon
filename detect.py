@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+import torch.nn.functional as F
+import torchvision.transforms as transforms
 from PIL import Image
 from torch.autograd import Variable
 
@@ -18,32 +20,38 @@ def load_classes(path):
     return names
 
 
+def pad_to_square(img, pad_value):
+    c, h, w = img.shape
+    dim_diff = np.abs(h - w)
+    # (upper / left) padding and (lower / right) padding
+    pad1, pad2 = dim_diff // 2, dim_diff - dim_diff // 2
+    # Determine padding
+    pad = (0, 0, pad1, pad2) if h <= w else (pad1, pad2, 0, 0)
+    # Add padding
+    img = F.pad(img, pad, "constant", value=pad_value)
+
+    return img, pad
+
+
+def resize(image, size):
+    image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
+    return image
+
+
 def read_image_as_numpy(filename):
-    im = Image.open(filename)
-    size = [im.size[0], im.size[1]]
-    resized = int(IMAGE_SIZE / (np.max(size) / np.min(size)))
-    if size[0] > size[1]:
-        np_im = im.resize((IMAGE_SIZE, resized), Image.BICUBIC)
-    else:
-        np_im = im.resize((resized, IMAGE_SIZE), Image.BICUBIC)
-    np_im = np.array(np_im)
+    img = transforms.ToTensor()(Image.open(filename))
+    # Pad to square resolution
+    img, _ = pad_to_square(img, 0)
+    # Resize
+    img = resize(img, IMAGE_SIZE)
 
-    img = np.zeros((IMAGE_SIZE, IMAGE_SIZE, 3))
-    start = int((IMAGE_SIZE - resized) / 2)
-    if size[0] > size[1]:
-        img[start:start + resized, :] = np_im
-    else:
-        img[:, start:start + resized] = np_im
-
-    img = np.swapaxes(np.swapaxes(img, 0, 2), 1, 2)
-
-    return img.astype(np.float32) / 255.0
+    return img
 
 
 def detect_image_objects(image):
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
-    torch_image = torch.from_numpy(image)
-    torch_image = Variable(torch_image.type(Tensor))
+    image = image.expand(1, 3, 416, 416)
+    torch_image = Variable(image.type(Tensor))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     classes = load_classes("data/coco.names")
@@ -70,7 +78,7 @@ def detect_image_objects(image):
 
 def detect_image_from_path(filename):
     img = read_image_as_numpy(filename)
-    img = np.expand_dims(img, axis=0)
+    img = img.expand(1, 3, 416, 416)
     return detect_image_objects(img)
 
 
