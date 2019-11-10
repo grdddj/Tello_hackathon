@@ -4,7 +4,10 @@ import time
 import cv2
 from easytello.stats import Stats
 from functools import wraps
+from playsound import playsound
+
 import detect
+import navigate
 
 class Tello:
     def __init__(self, tello_ip: str='192.168.10.1', debug: bool=True):
@@ -179,8 +182,22 @@ class Tello:
         current_positon = self.get_current_position_string()
         self.objects_to_be_seen[current_positon] = response
 
-        is_there_a_bottle = "bottle" in response
+        is_there_a_bottle = False
+        for obj in response:
+            if obj["name"] == "bottle":
+                is_there_a_bottle = True
+                print("BOTTLE THERE!")
+                playsound('Hlas 001.mp3')
+                break
         print("is_there_a_bottle", is_there_a_bottle)
+
+        if is_there_a_bottle:
+            for obj in response:
+                if obj["name"] == "person":
+                    is_there_a_bottle = True
+                    print("ALCOHOLIC THERE!")
+                    playsound('Hlas 003.mp3')
+                    break
 
         # Drawing a rectangle around the object
         img = cv2.imread(file_name)
@@ -190,6 +207,20 @@ class Tello:
         y_pixels_model = 416
         x_ratio = x_pixels_dron / x_pixels_model
         y_ratio = y_pixels_dron / y_pixels_model
+
+        found_mode = False
+        is_lost = False
+
+        for i, d in enumerate(response):
+            found_mode = True
+
+            angle, height, forward = navigate.analyze_scene(d)
+            no_change = angle == 0 and height == 0 and forward == 0
+            print("{} {}: angle {} height {} forward {}".format(d['name'], i, angle, height, forward))
+
+            if found_mode and (is_lost or no_change):
+                navigate.take_three_flips()
+                found_mode = False        # Initializing agent to help us navigate
 
         print("rectangle")
         for obj in response:

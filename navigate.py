@@ -76,6 +76,7 @@ def take_action_from_scene(box, actions):
 
 
 def take_three_flips():
+    print("taking three flips")
     pass  # Not yet implemented
 
 
