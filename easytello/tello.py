@@ -127,7 +127,7 @@ class Tello:
                     self.send_photo = False
                     print("Automatic photo")
                     file_name = self.save_photo(frame)
-                    self.contact_model(file_name)
+                    is_there_a_bottle = self.contact_model(file_name)
             except cv2.error as err:
                 print("CV ERROR ENCOUNTERED")
                 print(err)
@@ -172,11 +172,15 @@ class Tello:
         """
         Calls the model to analyze the photo. Stores the objects it finds in a
             local dictionary.
+        Returns a boolean whether the bottle was located
         """
         print_with_time("contact_model")
         response = detect.detect_image_from_path(file_name)
         current_positon = self.get_current_position_string()
         self.objects_to_be_seen[current_positon] = response
+
+        is_there_a_bottle = "bottle" in response
+        print("is_there_a_bottle", is_there_a_bottle)
 
         # Drawing a rectangle around the object
         img = cv2.imread(file_name)
@@ -204,11 +208,24 @@ class Tello:
             print("start", start)
             print("end", end)
 
-            cv2.rectangle(img, start, end, (0, 255, 0), 3)
+            # Green colour by default
+            colour = (0, 255, 0)
+
+            # Red colour, if the object is
+            # WARNING: for some reason it is not RGB, but BGR
+            if obj["name"] == "bottle":
+                colour = (0, 0, 255)
+            # Let laptop be BLUE
+            elif obj["name"] == "laptop":
+                colour = (255, 0, 0)
+
+            cv2.rectangle(img, start, end, colour, 3)
 
         cv2.imwrite(file_name[:-4] + "_rectangled.png", img)
 
         print(response)
+
+        return is_there_a_bottle
 
     def wait(self, delay: float):
         # Displaying wait message (if 'debug' is True)

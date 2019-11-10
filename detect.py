@@ -47,12 +47,14 @@ def read_image_as_numpy(filename):
 
     return img
 
-
+# @profile
 def detect_image_objects(image):
     Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
     image = image.expand(1, 3, 416, 416)
     torch_image = Variable(image.type(Tensor))
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
+    # device = "cpu"
 
     classes = load_classes("data/coco.names")
     model = Darknet("data/yolov3.cfg", img_size=IMAGE_SIZE).to(device)
@@ -83,4 +85,7 @@ def detect_image_from_path(filename):
 
 
 if __name__ == "__main__":
-    print(detect_image_from_path('samples/bottles.jpg'))
+    start = time.time()
+    print(detect_image_from_path('samples/jirka.jpg'))
+    # print(detect_image_from_path('samples/piva.png'))
+    print(time.time() - start)
