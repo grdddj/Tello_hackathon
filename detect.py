@@ -80,7 +80,7 @@ def detect_image_objects(image):
 
 def detect_image_from_path(filename):
     img = read_image_as_numpy(filename)
-    img = img.expand(1, 3, 416, 416)
+    img = img.expand(1, 3, IMAGE_SIZE, IMAGE_SIZE)
     return detect_image_objects(img)
 
 

@@ -91,8 +91,9 @@ if __name__ == "__main__":
         found_mode = True
 
         angle, height, forward = analyze_scene(d)
+        no_change = angle == 0 and height == 0 and forward == 0
         print("Person {}: angle {} height {} forward {}".format(i, angle, height, forward))
 
-        if found_mode and is_lost:
+        if found_mode and (is_lost or no_change):
             take_three_flips()
             found_mode = False
