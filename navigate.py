@@ -1,13 +1,9 @@
-import logging
-
-from agents.drone_sim_env import drone_sim
-from agents.rl_drone import RLAgent
 from detect import detect_image_from_path
 
 import numpy as np
 
-SCREEN_WIDTH = 960
-SCREEN_HEIGHT = 720
+SCREEN_WIDTH = 416
+SCREEN_HEIGHT = 416
 
 
 def get_distance_from_center(x, y):
@@ -18,25 +14,29 @@ def get_distance_from_center(x, y):
     return np.sqrt((np.square(np.array([x, y]) - np.array([SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2]))).sum())
 
 
-def load_agent():
-    ENV_NAME = 'drone'
-    env = drone_sim()
-    agent = RLAgent(env)
-    agent.agent.load_weights('agents/ddpg_{}_weights.h5f'.format(ENV_NAME))
-
-    return agent
-
-
-def analyze_scene(agent, box):
+def analyze_scene(box):
     center_x, center_y = calc_object_center(box)
+    area = calc_object_area(box)
 
-    # pass x,y coordinate to DDPG to get actions
-    actions = agent.agent.forward([center_x, center_y])
+    angle = 0
+    forward = 0
+    height = 0
 
-    # log debug info
-    logging.debug('%d,%d,%d,%d' % (center_x, center_y, actions[0], actions[1]))
+    # our subject is too much to the right or left
+    if center_x > (SCREEN_WIDTH / 2 * 1.3):
+        angle = 20
+    if center_x < (SCREEN_WIDTH / 2 * 0.7):
+        angle = -20
 
-    return actions
+    # if our subject is very low, go down a little
+    #if angle == 0 and center_y > (SCREEN_HEIGHT / 2 * 1.5):
+    #    height = -20
+
+    # if not spinning, go forward towards the object
+    if angle == 0 and height == 0 and area < 200 * 200:
+        forward = 20
+
+    return angle, height, forward
 
 
 def calc_object_center(box):
@@ -50,6 +50,7 @@ def calc_object_area(box):
     return (box['x2'] - box['x1']) * (box['y2'] - box['y1'])
 
 
+"""
 def take_action_from_scene(box, actions):
     center_x, center_y = calc_object_center(box)
     area_p = calc_object_area(box)
@@ -71,14 +72,27 @@ def take_action_from_scene(box, actions):
         forward = 0
 
     return angle, height, forward
+"""
+
+
+def take_three_flips():
+    pass  # Not yet implemented
 
 
 if __name__ == "__main__":
-    agent = load_agent()
-    detections = detect_image_from_path('samples/bottles.jpg')
-    for d in detections:
+    detections = detect_image_from_path('samples/jirka.jpg')
+    found_mode = False
+    is_lost = False
+
+    for i, d in enumerate(detections):
         if d['name'] != 'person':
             continue
 
-        actions = analyze_scene(agent, d)
-        take_action_from_scene(d, actions)
+        found_mode = True
+
+        angle, height, forward = analyze_scene(d)
+        print("Person {}: angle {} height {} forward {}".format(i, angle, height, forward))
+
+        if found_mode and is_lost:
+            take_three_flips()
+            found_mode = False
